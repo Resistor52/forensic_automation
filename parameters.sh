@@ -10,4 +10,4 @@ export EVENT_START='2019-03-12'
 export EVENT_END='2019-03-20'
 
 # Set the Target VolumeId
-TARGET_VOLUME=vol-031a219be0ae38a73
+TARGET_VOLUME=vol-017266ecdfd6d143b
