@@ -152,26 +152,27 @@ COMMENT="Mount the DATA Volume as Read/Write"
 run_ssm_command SIFT wait
 
 # Create a Hash Database of Known Files
-PARAMETERS='{"commands":["mkdir /cases/changed; cd /cases/changed; find /mnt/linux_base -type f -print0 | xargs -0 md5sum > known_files.md5; hfind -i md5sum known_files.md5"]}'
+PARAMETERS='{"commands":["mkdir /mnt/data/changed; cd /mnt/data/changed; find /mnt/linux_base -type f -print0 | xargs -0 md5sum > known_files.md5; hfind -i md5sum known_files.md5"]}'
 COMMENT="Create a Hash Database of Known Files"
 run_ssm_command SIFT wait
 
 # Find Changed Files relative to BASELINE
-PARAMETERS='{"commands":["mkdir /cases/changed; cd /cases/changed; wget https://s3.amazonaws.com/forensicate.cloud-data/find_changed_files.sh; bash find_changed_files.sh; cat hfind.log"]}'
+PARAMETERS='{"commands":["mkdir /mnt/data/changed; cd /mnt/data/changed; wget https://s3.amazonaws.com/forensicate.cloud-data/find_changed_files.sh; bash find_changed_files.sh; cat hfind.log"]}'
 COMMENT="Find Changed Files relative to BASELINE"
 run_ssm_command SIFT wait
 
 # Run the TSK sorter command
 PARAMETERS='{"commands":[
-  "sorter -s -f ext4 -d /mnt/data -x /cases/changed/known_files.md5 /dev/xvdf1"
+  "mkdir /mnt/data/sorter",
+  "sorter -s -f ext4 -d /mnt/data/sorter -x /mnt/data/changed/known_files.md5 /dev/xvdf1"
   ]}'
 COMMENT="Run the TSK sorter command"
 run_ssm_command  SIFT nowait
 
 # Run the TSK recover command
 PARAMETERS='{"commands":[
-  "mkdir /cases/recovered",
-  "tsk_recover /dev/xvdf1 /cases/recovered"
+  "mkdir /mnt/data/recovered",
+  "tsk_recover /dev/xvdf1 /mnt/data/recovered"
   ]}'
 COMMENT="Run the TSK recover command"
 run_ssm_command SIFT wait
@@ -212,12 +213,12 @@ COMMENT="Look for Splunk"
 run_ssm_command SIFT nowait
 
 # Virus scan the mounted evidence
-PARAMETERS='{"commands":["clamscan -i -r --log=/cases/clam-fs.log /mnt/linux_mount/; echo done"]}'
+PARAMETERS='{"commands":["clamscan -i -r --log=/mnt/data/clam-fs.log /mnt/linux_mount/; echo done"]}'
 COMMENT="Virus scan the mounted evidence"
 run_ssm_command SIFT nowait
 
 # Virus scan the unalocated space
-PARAMETERS='{"commands":["clamscan -i -r --log=/cases/clam-us.log /cases/recovered/; echo done"]}'
+PARAMETERS='{"commands":["clamscan -i -r --log=/mnt/data/clam-us.log /mnt/data/recovered/; echo done"]}'
 COMMENT="Virus scan the unalocated space"
 run_ssm_command SIFT nowait
 
@@ -240,7 +241,7 @@ run_ssm_command SIFT wait
 PARAMETERS='{"commands":[
   "cd /tmp/Loki-*",
   "python loki.py --noindicator -p /mnt/linux_mount/",
-  "cp loki-siftworkstation.log /cases"
+  "cp loki-siftworkstation.log /mnt/data"
   ]}'
 COMMENT="Run Loki"
 run_ssm_command SIFT nowait
@@ -263,10 +264,10 @@ PARAMETERS='{"commands":[
   "echo \"<----list the startup scrips in reverse chronological order of creation---->\"",
   "ls -als -t /mnt/linux_mount/etc/rc*.d/",
   "echo \"<----identify new and changed start-up scripts---->\"",
-  "find /mnt/linux_mount/etc/rc*.d/ -type f -print0 | xargs -0 md5sum | sed \"s|\/mnt\/linux_mount||\" > /cases/startup-scripts-evidence.log",
-  "find /mnt/linux_base/etc/rc*.d/ -type f -print0 | xargs -0 md5sum | sed \"s|\/mnt\/linux_base||\" > /cases/startup-scripts-baseline.log",
-  "diff /cases/startup-scripts-baseline.log /cases/startup-scripts-evidence.log > /cases/startup-scripts-diff.log",
-  "cat /cases/startup-scripts-diff.log"
+  "find /mnt/linux_mount/etc/rc*.d/ -type f -print0 | xargs -0 md5sum | sed \"s|\/mnt\/linux_mount||\" > /mnt/data/startup-scripts-evidence.log",
+  "find /mnt/linux_base/etc/rc*.d/ -type f -print0 | xargs -0 md5sum | sed \"s|\/mnt\/linux_base||\" > /mnt/data/startup-scripts-baseline.log",
+  "diff /mnt/data/startup-scripts-baseline.log /mnt/data/startup-scripts-evidence.log > /mnt/data/startup-scripts-diff.log",
+  "cat /mnt/data/startup-scripts-diff.log"
   ]}'
 COMMENT="Investigate start-up scripts"
 run_ssm_command SIFT nowait
@@ -278,16 +279,16 @@ PARAMETERS='{"commands":[
   "echo \"<----type the files in the evidence /tmp directory---->\"",
   "find /mnt/linux_mount/tmp | xargs file",
   "echo \"<----list the files in the recovered /tmp directory---->\"",
-  "ls –als /cases/recovered/tmp",
+  "ls –als /mnt/data/recovered/tmp",
   "echo \"<----type the files in the recovered /tmp directory---->\"",
-  "find /cases/recovered/tmp | xargs file"
+  "find /mnt/data/recovered/tmp | xargs file"
   ]}'
 COMMENT="Check for suspicious files - tmp directory"
 run_ssm_command SIFT nowait
 
 # Check for suspicious files - unusual SUID
 PARAMETERS='{"commands":[
-  "cd /cases/",
+  "cd /mnt/data/",
   "find /mnt/linux_mount/ -uid 0 -perm -4000 -print > suid_evidence",
   "find /mnt/linux_base/ -uid 0 -perm -4000 -print > suid_base",
   "cut suid_base -d'/' -f4- > suid_base_relative",
@@ -306,7 +307,7 @@ PARAMETERS='{"commands":[
   "echo \"<----Evidence files greater than 10Mb---->\"",
   "find /mnt/linux_mount/ -size +10000k",
   "echo \"<----Recovered files greater than 10Mb---->\"",
-  "find /cases/recovered/ -size +10000k"
+  "find /mnt/data/recovered/ -size +10000k"
   ]}'
 COMMENT="Check for suspicious files - large files"
 run_ssm_command SIFT nowait
@@ -336,11 +337,11 @@ run_ssm_command SIFT nowait
 # Examine local user accounts and groups
 PARAMETERS='{"commands":[
   "echo \"<----Local User Accounts---->\"",
-  "diff /mnt/linux_base/etc/passwd /mnt/linux_mount/etc/passwd > /cases/passwd_diff",
-  "cat /cases/passwd_diff",
+  "diff /mnt/linux_base/etc/passwd /mnt/linux_mount/etc/passwd > /mnt/data/passwd_diff",
+  "cat /mnt/data/passwd_diff",
   "echo \"<----Local Groups---->\"",
-  "diff /mnt/linux_base/etc/group /mnt/linux_mount/etc/group > /cases/group_diff",
-  "cat /cases/group_diff"
+  "diff /mnt/linux_base/etc/group /mnt/linux_mount/etc/group > /mnt/data/group_diff",
+  "cat /mnt/data/group_diff"
   ]}'
 COMMENT="Examine local user accounts and groups"
 run_ssm_command SIFT nowait
@@ -372,8 +373,8 @@ PARAMETERS='{"commands":[
   "echo \"<----Look at the yum.log---->\"",
   "cat /mnt/linux_mount/var/log/yum.log",
   "echo \"<----Look at the yum.log differences---->\"",
-  "diff /mnt/linux_base/var/log/yum.log /mnt/linux_mount/var/log/yum.log > /cases/yum-diff.txt",
-  "cat /cases/yum-diff.txt"
+  "diff /mnt/linux_base/var/log/yum.log /mnt/linux_mount/var/log/yum.log > /mnt/data/yum-diff.txt",
+  "cat /mnt/data/yum-diff.txt"
   ]}'
 COMMENT="Look at the yum log"
 run_ssm_command SIFT nowait
@@ -381,18 +382,18 @@ run_ssm_command SIFT nowait
 # Make a File System Timeline
 PARAMETERS='{"commands":[
   "echo \"<----Make the file system timeline---->\"",
-  "fls -r -m / /dev/xvdf1 > /cases/body.txt",
-  "mactime -b /cases/body.txt -d > /cases/timeline.csv",
+  "fls -r -m / /dev/xvdf1 > /mnt/data/body.txt",
+  "mactime -b /mnt/data/body.txt -d > /mnt/data/timeline.csv",
   "echo \"<----Dump the timeline---->\"",
-  "cat /cases/timeline.csv | sed \"s|File Name|File_Name|\""
+  "cat /mnt/data/timeline.csv | sed \"s|File Name|File_Name|\""
 ]}'
 COMMENT="Make a File System Timeline"
 run_ssm_command SIFT nowait
 
 # Make a Super Timeline Plaso File
 PARAMETERS='{"executionTimeout":["10800"],"commands":[
-  "log2timeline.py /cases/plaso.dump /dev/xvdf1",
-  "pinfo.py -v /cases/plaso.dump"
+  "log2timeline.py /mnt/data/plaso.dump /dev/xvdf1",
+  "pinfo.py -v /mnt/data/plaso.dump"
 ]}'
 COMMENT="Make a Super Timeline Plaso File"
 #run_ssm_command SIFT wait
@@ -403,7 +404,7 @@ EVENT_END='2019-03-20'
 DATE_FILTER='\"'"date > '"$EVENT_START" 00:00:00' AND date < '"$EVENT_END" 00:00:00'"'\"'
 DATE_FILTER='\"'$DATE_FILTER'\"'
 PARAMETERS='{"executionTimeout":["10800"],"commands":[
-  "psort.py /cases/plaso.dump '$DATE_FILTER' -w /cases/supertimeline.csv"
+  "psort.py /mnt/data/plaso.dump '$DATE_FILTER' -w /mnt/data/supertimeline.csv"
   ]}'
 COMMENT="Make a Super Timeline CSV File"
 #run_ssm_command SIFT nowait
