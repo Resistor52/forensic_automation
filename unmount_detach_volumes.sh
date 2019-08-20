@@ -11,7 +11,7 @@ PARAMETERS='{"commands":[
   "lsblk"
   ]}'
 COMMENT="Unmount All Attached Volumes "
-#run_ssm_command
+run_ssm_command SIFT wait
 
 echo; echo "*** All volumes un-mounted in the SIFT Workstation"
 

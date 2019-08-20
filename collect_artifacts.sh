@@ -55,7 +55,7 @@ echo
 # Mount the "Evidence" Volume as Read Only
 PARAMETERS='{"commands":["mkdir /mnt/linux_mount; mount -o ro /dev/xvdf1 /mnt/linux_mount/; lsblk"]}'
 COMMENT="Mount the EVIDENCE Volume as Read Only"
-run_ssm_command
+run_ssm_command SIFT wait
 echo
 
 # Determine AMI of Target Instance
@@ -129,7 +129,7 @@ echo
 # Mount the BASELINE Volume to the SIFT Workstation as Read Only
 PARAMETERS='{"commands":["mkdir /mnt/linux_base; mount -o ro /dev/xvdg1 /mnt/linux_base/; lsblk"]}'
 COMMENT="Mount the BASELINE Volume as Read Only"
-run_ssm_command
+run_ssm_command SIFT wait
 
 # Wait until the DATA Volume is complete
 aws ec2 wait volume-available --volume-ids $DATA_VOLUME \
@@ -144,82 +144,82 @@ echo
 # Format the DATA Volume
 PARAMETERS='{"commands":["mkfs.ext4 /dev/xvdh"]}'
 COMMENT="Format the DATA Volume"
-run_ssm_command
+run_ssm_command SIFT wait
 
 # Mount the DATA Volume to the SIFT Workstation as Read/Write
 PARAMETERS='{"commands":["mkdir /mnt/data; mount /dev/xvdh /mnt/data; lsblk"]}'
 COMMENT="Mount the DATA Volume as Read/Write"
-run_ssm_command
+run_ssm_command SIFT wait
 
 # Create a Hash Database of Known Files
 PARAMETERS='{"commands":["mkdir /cases/changed; cd /cases/changed; find /mnt/linux_base -type f -print0 | xargs -0 md5sum > known_files.md5; hfind -i md5sum known_files.md5"]}'
 COMMENT="Create a Hash Database of Known Files"
-run_ssm_command
+run_ssm_command SIFT wait
 
 # Find Changed Files relative to BASELINE
 PARAMETERS='{"commands":["mkdir /cases/changed; cd /cases/changed; wget https://s3.amazonaws.com/forensicate.cloud-data/find_changed_files.sh; bash find_changed_files.sh; cat hfind.log"]}'
 COMMENT="Find Changed Files relative to BASELINE"
-run_ssm_command
+run_ssm_command SIFT wait
 
 # Run the TSK sorter command
 PARAMETERS='{"commands":[
   "sorter -s -f ext4 -d /mnt/data -x /cases/changed/known_files.md5 /dev/xvdf1"
   ]}'
 COMMENT="Run the TSK sorter command"
-run_ssm_command nowait
+run_ssm_command  SIFT nowait
 
 # Run the TSK recover command
-PARAMETERS='{"commands":["
-  mkdir /cases/recovered;
-  tsk_recover /dev/xvdf1 /cases/recovered
-  "]}'
+PARAMETERS='{"commands":[
+  "mkdir /cases/recovered",
+  "tsk_recover /dev/xvdf1 /cases/recovered"
+  ]}'
 COMMENT="Run the TSK recover command"
-run_ssm_command
+run_ssm_command SIFT wait
 
 # Determine if keys are present on compromised system - SSH Folder
 PARAMETERS='{"commands":["ls -als /mnt/linux_mount/home/ec2-user/.ssh/"]}'
 COMMENT="Determine if keys are present on compromised system - SSH Folder"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Determine if keys are present on compromised system - AWS Folder
 PARAMETERS='{"commands":["ls -als /mnt/linux_mount/home/ec2-user/.aws/; echo; cat /mnt/linux_mount/home/ec2-user/.aws/credentials"]}'
 COMMENT="Determine if keys are present on compromised system - AWS Folder"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Determine if keys are present on compromised system - AWS Keys Expanded Search
 PARAMETERS='{"commands":["egrep -r 'AKIA[A-Z0-9]{16}' /mnt/linux_mount/ | egrep -v 'EXAMPLE'"]}'
 COMMENT="Determine if keys are present on compromised system - AWS Keys Expanded Search"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Determine if keys are present on compromised system - SSH Private Keys Expanded Search
 PARAMETERS='{"commands":["egrep -r \"PRIVATE KEY-----\" /mnt/linux_mount/"]}'
 COMMENT="Determine if keys are present on compromised system - SSH Private Keys Expanded Search"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Look for AWS Systems Manager
 PARAMETERS='{"commands":["find /mnt/linux_mount/ -name 'amazon-ssm-agen*';echo done"]}'
 COMMENT="Look for AWS Systems Manager"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Look for the AWS Inspector Agent
 PARAMETERS='{"commands":["find /mnt/linux_mount/ -name 'awsagen*'; echo done"]}'
 COMMENT="Look for the AWS Inspector Agent"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Look for Splunk
 PARAMETERS='{"commands":["find /mnt/linux_mount/ -name 'splunk*'; echo done"]}'
 COMMENT="Look for Splunk"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Virus scan the mounted evidence
 PARAMETERS='{"commands":["clamscan -i -r --log=/cases/clam-fs.log /mnt/linux_mount/; echo done"]}'
 COMMENT="Virus scan the mounted evidence"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Virus scan the unalocated space
 PARAMETERS='{"commands":["clamscan -i -r --log=/cases/clam-us.log /cases/recovered/; echo done"]}'
 COMMENT="Virus scan the unalocated space"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Install Loki
 PARAMETERS='{"commands":[
@@ -234,7 +234,7 @@ PARAMETERS='{"commands":[
   "python /tmp/Loki-0.29.1/loki.py --help"
   ]}'
 COMMENT="Install Loki"
-run_ssm_command
+run_ssm_command SIFT wait
 
 # Run Loki
 PARAMETERS='{"commands":[
@@ -243,7 +243,7 @@ PARAMETERS='{"commands":[
   "cp loki-siftworkstation.log /cases"
   ]}'
 COMMENT="Run Loki"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Investigate cron Jobs
 PARAMETERS='{"commands":[
@@ -256,7 +256,7 @@ PARAMETERS='{"commands":[
   "find /mnt/linux_mount/var/spool/cron/ -type f | xargs cat"
   ]}'
 COMMENT="Investigate cron Jobs"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Investigate start-up scripts
 PARAMETERS='{"commands":[
@@ -269,7 +269,7 @@ PARAMETERS='{"commands":[
   "cat /cases/startup-scripts-diff.log"
   ]}'
 COMMENT="Investigate start-up scripts"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Check for suspicious files - tmp directory
 PARAMETERS='{"commands":[
@@ -283,7 +283,7 @@ PARAMETERS='{"commands":[
   "find /cases/recovered/tmp | xargs file"
   ]}'
 COMMENT="Check for suspicious files - tmp directory"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Check for suspicious files - unusual SUID
 PARAMETERS='{"commands":[
@@ -299,7 +299,7 @@ PARAMETERS='{"commands":[
   "wc -l suid_diff"
   ]}'
 COMMENT="Check for suspicious files - unusual SUID"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Check for suspicious files - large files
 PARAMETERS='{"commands":[
@@ -309,7 +309,7 @@ PARAMETERS='{"commands":[
   "find /cases/recovered/ -size +10000k"
   ]}'
 COMMENT="Check for suspicious files - large files"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Check for suspicious files - files with high entropy
 PARAMETERS='{"commands":[
@@ -324,14 +324,14 @@ PARAMETERS='{"commands":[
   "wc -l high_density_diff"
   ]}'
 COMMENT="Check for suspicious files - files with high entropy"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Review Logs - bash history
 PARAMETERS='{"commands":[
   "for i in $(find /mnt/linux_mount/ -name .bash_history); do echo FILE $i; echo CONTENTS; cat $i; echo; done"
   ]}'
 COMMENT="Review Logs - bash history"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Examine local user accounts and groups
 PARAMETERS='{"commands":[
@@ -343,12 +343,12 @@ PARAMETERS='{"commands":[
   "cat /cases/group_diff"
   ]}'
 COMMENT="Examine local user accounts and groups"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Look for accounts with passwords set
 PARAMETERS='{"commands":["cat /mnt/linux_mount/etc/shadow | grep -F \"$\""]}'
 COMMENT="Look for accounts with passwords set"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Examine bootup events & timing
 PARAMETERS='{"commands":[
@@ -360,12 +360,12 @@ PARAMETERS='{"commands":[
   "cat /mnt/linux_mount/var/log/boot.log"
   ]}'
 COMMENT="Examine bootup events & timing"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Identify past IP addresses
 PARAMETERS='{"commands":["grep -A4 -B1 \"Net device info\" /mnt/linux_mount/var/log/cloud-init-output.log"]}'
 COMMENT="Identify past IP addresses"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Look at the yum log
 PARAMETERS='{"commands":[
@@ -376,7 +376,7 @@ PARAMETERS='{"commands":[
   "cat /cases/yum-diff.txt"
   ]}'
 COMMENT="Look at the yum log"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Make a File System Timeline
 PARAMETERS='{"commands":[
@@ -384,19 +384,10 @@ PARAMETERS='{"commands":[
   "fls -r -m / /dev/xvdf1 > /cases/body.txt",
   "mactime -b /cases/body.txt -d > /cases/timeline.csv",
   "echo \"<----Dump the timeline---->\"",
-  "cat /cases/timeline.csv"
-]}'
-COMMENT="Make a File System Timeline"
-run_ssm_command nowait
-
-# Make a File System Timeline
-PARAMETERS='{"commands":[
-  "fls -r -m / /dev/xvdf1 > /cases/body.txt",
-  "mactime -b /cases/body.txt -d > /cases/timeline.csv",
   "cat /cases/timeline.csv | sed \"s|File Name|File_Name|\""
 ]}'
 COMMENT="Make a File System Timeline"
-run_ssm_command nowait
+run_ssm_command SIFT nowait
 
 # Make a Super Timeline Plaso File
 PARAMETERS='{"executionTimeout":["10800"],"commands":[
@@ -404,7 +395,7 @@ PARAMETERS='{"executionTimeout":["10800"],"commands":[
   "pinfo.py -v /cases/plaso.dump"
 ]}'
 COMMENT="Make a Super Timeline Plaso File"
-run_ssm_command wait
+#run_ssm_command SIFT wait
 
 # Make a Super Timeline CSV File
 EVENT_START='2019-03-12'
@@ -415,4 +406,6 @@ PARAMETERS='{"executionTimeout":["10800"],"commands":[
   "psort.py /cases/plaso.dump '$DATE_FILTER' -w /cases/supertimeline.csv"
   ]}'
 COMMENT="Make a Super Timeline CSV File"
-run_ssm_command nowait
+#run_ssm_command SIFT nowait
+
+echo "*** Automated Forensic Evidence Collection is Complete"
