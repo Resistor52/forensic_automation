@@ -28,10 +28,18 @@ echo "*** The Target Instance Status Checks are OK"
 echo "Configure the Target Instance"
 PARAMETERS='{"commands":[
   "wget https://s3.amazonaws.com/forensicate.cloud-data/dont_peek.sh",
-  "bash dont_peek.sh forensics"
+  "nohup bash dont_peek.sh forensics &",
+  "exit"
   ]}'
 COMMENT="Configure the Target Instance"
 run_ssm_command TARGET wait
 
 echo "The Target instance will be ready in about 10 minutes."
 echo "When it is ready to be imaged it will shutdown"
+
+# Wait until the Target Instance has stopped
+echo "Waiting for the Target Instance to enter RUNNING state with Status Checks completed"
+aws ec2 wait instance-stopped --instance-ids $TARGET_INSTANCE \
+ --region $REGION --profile $PROFILE
+echo "*** The Target Instance has stopped and is ready to be imaged"
+echo "*** Setup is complete"

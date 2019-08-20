@@ -1,0 +1,11 @@
+#!/bin/bash
+
+export PROFILE='your-profile'
+export REGION='your-region'
+export SECURITY_GROUP="SSH-Only"
+export BUCKET="you-bucket-here"
+export ACCOUNT="999999999999"
+
+export CASE='123456'
+export EVENT_START='2019-03-12'
+export EVENT_END='2019-03-20'
