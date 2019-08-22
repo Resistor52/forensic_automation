@@ -6,26 +6,26 @@ This code for this project is intended to run from a workstation that has the AW
 
 The code consists of the following scripts:
 ### Setup Scripts
-* **[setup_sift.sh](blob/master/setup_sift.sh)** - This script takes the basic SIFT AMI, updates it and installs the AWS Systems Manager (SSM) Agent. (See the [Make a SIFT Workstation AMI](https://forensicate.cloud/aws/sift-ami) reference.) For improved security the "sansforensics" account is disabled after the SSM Agent is installed, since all commands will now be executed via SSM.
-* **[setup_target.sh](blob/master/setup_target.sh)** - This script makes an "infected" Target EC2 Instance. For more information see [Preparing the Demonstration Host Target](https://forensicate.cloud/ws1/Lab1-Preparing_the_Demonstration_Host_Target). Note that to try this POC, it is not necessary to make an "infected" Target. Instead, you can use a public snapshot that I have created manually using the process that this script automates. (See the next script.)
-* **[make_example_volume.sh](blob/master/make_example_volume.sh)** - This script makes an example target volume based on a public snapshot that is similar to the volume created with the **setup_target.sh** script. (Note: you really only need to run one or the other.)
+* **[setup_sift.sh](setup_sift.sh)** - This script takes the basic SIFT AMI, updates it and installs the AWS Systems Manager (SSM) Agent. (See the [Make a SIFT Workstation AMI](https://forensicate.cloud/aws/sift-ami) reference.) For improved security the "sansforensics" account is disabled after the SSM Agent is installed, since all commands will now be executed via SSM.
+* **[setup_target.sh](setup_target.sh)** - This script makes an "infected" Target EC2 Instance. For more information see [Preparing the Demonstration Host Target](https://forensicate.cloud/ws1/Lab1-Preparing_the_Demonstration_Host_Target). Note that to try this POC, it is not necessary to make an "infected" Target. Instead, you can use a public snapshot that I have created manually using the process that this script automates. (See the next script.)
+* **[make_example_volume.sh](make_example_volume.sh)** - This script makes an example target volume based on a public snapshot that is similar to the volume created with the **setup_target.sh** script. (Note: you really only need to run one or the other.)
 
 ### Working Scripts
-* **[collect_artifacts.sh](blob/master/collect_artifacts.sh)** - This is the script that does the work of collecting the forensic evidence. The script makes a "Evidence" snapshot of the "Target" EBS Volume. Next, it creates an EBS "Evidence" Volume based on the Snapshot. This "Evidence" Volume is attached to the SIFT Workstation and mounted read-only. For comparison purposes, a "Baseline" volume is created based on the same AMI as the Target Instance. The Baseline volume is also attached to the SIFT Workstation and mounted read-only. A Data EBS Volume is attached for the collection of evidence. Lastly, a series of commands are executed on the SIFT Workstation (Via SSM) to collect the evidence. The script knows which volume to treat as the "Target" based on the contents of a SQS queue.
-* **[add_volume_to_queue.sh](blob/master/add_volume_to_queue.sh)** - This script is used to pass the VolumeId of the Target volume to the SQS queue to be processed. The Case Number and Sample Id are passed as message attributes.
+* **[collect_artifacts.sh](collect_artifacts.sh)** - This is the script that does the work of collecting the forensic evidence. The script makes a "Evidence" snapshot of the "Target" EBS Volume. Next, it creates an EBS "Evidence" Volume based on the Snapshot. This "Evidence" Volume is attached to the SIFT Workstation and mounted read-only. For comparison purposes, a "Baseline" volume is created based on the same AMI as the Target Instance. The Baseline volume is also attached to the SIFT Workstation and mounted read-only. A Data EBS Volume is attached for the collection of evidence. Lastly, a series of commands are executed on the SIFT Workstation (Via SSM) to collect the evidence. The script knows which volume to treat as the "Target" based on the contents of a SQS queue.
+* **[add_volume_to_queue.sh](add_volume_to_queue.sh)** - This script is used to pass the VolumeId of the Target volume to the SQS queue to be processed. The Case Number and Sample Id are passed as message attributes.
 
 ### Supporting Scripts
-* **[functions.sh](blob/master/functions.sh)** - This file contains the functions that the other scripts call.
-* **[parameters.sh](blob/master/parameters.sh)** - This file contains the parameters that need to be customized for each user's AWS account. The other scripts will call this script to load the parameters into memory. Copy the **parameters.sh-SAMPLE** file to **parameters.sh** and modify it as appropriate.
+* **[functions.sh](functions.sh)** - This file contains the functions that the other scripts call.
+* **[parameters.sh](parameters.sh)** - This file contains the parameters that need to be customized for each user's AWS account. The other scripts will call this script to load the parameters into memory. Copy the **parameters.sh-SAMPLE** file to **parameters.sh** and modify it as appropriate.
 
 ### Helper Scripts
-* **[mount_volumes.sh](blob/master/mount_volumes.sh)** - Use this script to mount the volumes after the SIFT Workstation is restarted.
-* **[unmount_detach_volumes.sh](blob/master/unmount_detach_volumes.sh)** - Use this script to unmount and detach the volumes after the analysis of a particular Evidence volume has completed.
-* **[create_queue.sh](blob/master/create_queue.sh)** - Use this script to create the SQS queue to contain the volumes to be processed.
-* **[fetch_message.sh](blob/master/fetch_message.sh)** - Run this script to see the current message in the queue.
-* **[delete_mmessage.sh](blob/master/delete_mmessage.sh)** - This script is used to delete the current message after the volume has been processed.
+* **[mount_volumes.sh](mount_volumes.sh)** - Use this script to mount the volumes after the SIFT Workstation is restarted.
+* **[unmount_detach_volumes.sh](unmount_detach_volumes.sh)** - Use this script to unmount and detach the volumes after the analysis of a particular Evidence volume has completed.
+* **[create_queue.sh](create_queue.sh)** - Use this script to create the SQS queue to contain the volumes to be processed.
+* **[fetch_message.sh](fetch_message.sh)** - Run this script to see the current message in the queue.
+* **[delete_mmessage.sh](delete_mmessage.sh)** - This script is used to delete the current message after the volume has been processed.
 * **[unmount_detach_volumes.sh]
-* **TODO: [process_queue.sh](blob/master/process_queue.sh)** - This script contains an endless loop that repeatedly calls the **collect_artifacts.sh** script to process the next EBS Volume. If the **collect_artifacts.sh** script has a clean exit, the message will be removed from the queue by calling **delete_message.sh**. The volumes will be unmounted and detached by calling the **unmount_detach_volumes.sh** script and the loop will iterate.
+* **TODO: [process_queue.sh](process_queue.sh)** - This script contains an endless loop that repeatedly calls the **collect_artifacts.sh** script to process the next EBS Volume. If the **collect_artifacts.sh** script has a clean exit, the message will be removed from the queue by calling **delete_message.sh**. The volumes will be unmounted and detached by calling the **unmount_detach_volumes.sh** script and the loop will iterate.
 
 
 Normally the SIFT will be either kept running or will be in a stopped state yet fully patched, so it will not need to be provisioned every time EBS Volume forensics is needed.
@@ -36,7 +36,7 @@ The **setup_sift.sh** script assumes that there is an existing IAM Role called "
 * AmazonS3FullAccess,
 * AmazonSSMManagedInstanceCore
 
-The **setup_target.sh** script assumes there is an existing IAM Role called "SSM_ManagedInstance" with the * AmazonSSMManagedInstanceCore permission.
+The **setup_target.sh** script assumes there is an existing IAM Role called "SSM_ManagedInstance" with the AmazonSSMManagedInstanceCore permission.
 
  The **setup_sift.sh** requires the **sshpass** utility (https://linux.die.net/man/1/sshpass) as the default password for the SIFT Workstation is hard-coded in the script.
 
@@ -52,9 +52,10 @@ The **setup_target.sh** script assumes there is an existing IAM Role called "SSM
 4. Make a "SSH-Only" security group that allows only inbound SSH access from your IP address.
 5. Run the **setup_sift.sh** script to provision a SIFT Workstation and configure it. This will take some time because the SIFT Needs to be updated.
 6. Run the **make_example_volume.sh** script to create an interesting EBS Volume to forensicate.
-7. Determine the VolumeId of the Target Volume by looking in the AWS Console or by using the output from the previous step. Run the **add_volume_to_queue.sh** script to add the volume to be processed to the queue. Run the command as follows:
+7. Determine the VolumeId of the Target Volume by looking in the AWS Console (or by using the output from the previous step). Run the **add_volume_to_queue.sh** script to add the volume to be processed to the queue. Run the command as follows:
 ```
 add_volume_to_queue.sh VOLUME "Case-1234" "Sample-ABC1234"
 ```
 Where *VOLUME* is the VolumeId to be processed.
+
 8. Run the **collect_artifacts.sh** script to process the EBS volume. This will take some time so monitor the progress of the script and examine the interim output in the Systems Manager Run Command "Command History."
