@@ -4,7 +4,33 @@ set -e
 source parameters.sh
 source functions.sh
 
+# Test for dependency
+# https://stedolan.github.io/jq/
+if [ $(which jq| wc -c) -lt 2 ]; then
+  echo "This script requires the jq utility. See https://stedolan.github.io/jq/"
+  exit
+fi
+
+
 ### Collect Forensic Artifacts
+
+MESSAGE=$(aws sqs receive-message  --queue-url "https://queue.amazonaws.com/$ACCOUNT/AnalyzeEBSVolumes.fifo" \
+  --attribute-names All --message-attribute-names All --max-number-of-messages 1 \
+  --output json --region $REGION --profile $PROFILE \
+  --query "Messages[0].{
+      Body: Body,
+      Case: MessageAttributes.CASE.StringValue,
+      SampleId: MessageAttributes.SampleId.StringValue
+    }")
+
+TARGET_VOLUME=$(echo $MESSAGE | jq '.["Body"]')
+echo "The Target Volume is "$TARGET_VOLUME"
+
+CASE=$(echo $MESSAGE | jq '.["Case"]')
+echo $CASE
+
+SampleId=$(echo $MESSAGE | jq '.["SampleId"]')
+echo $SampleId
 
 # Verify TARGET_VOLUME is not null
 if [ $(echo $TARGET_VOLUME | wc -c) -lt 5 ]; then
@@ -26,7 +52,7 @@ echo "*** The SIFT Workstation is in the $AZ availability zone"
 
 # Make a "Evidence" Snapshot of the "Target" Volume
 EVIDENCE_SNAPSHOT=$(aws ec2 create-snapshot --volume-id $TARGET_VOLUME --description 'EVIDENCE - Case '$CASE \
---tag-specifications 'ResourceType=snapshot,Tags=[{Key=Name,Value=EVIDENCE},{Key=Ticket,Value='$CASE'}]' \
+--tag-specifications 'ResourceType=snapshot,Tags=[{Key=Name,Value=EVIDENCE},{Key=Ticket,Value='$CASE'},{Key=SampleId,Value='$SampleId'},{Key=SampleId,Value='$SampleId'}]' \
 --query SnapshotId --region $REGION --output json --profile $PROFILE)
 EVIDENCE_SNAPSHOT=$(sed -e 's/^"//' -e 's/"$//' <<<"$EVIDENCE_SNAPSHOT")  # Remove Quotes
 echo "*** The Evidence SnapshotId is $EVIDENCE_SNAPSHOT"
@@ -37,7 +63,7 @@ aws ec2 wait snapshot-completed --snapshot-ids $EVIDENCE_SNAPSHOT \
 
 # Make an "Evidence" Volume from the snapshot in the same availability zone as the SIFT Workstation
 EVIDENCE_VOLUME=$(aws ec2 create-volume --volume-type gp2 --snapshot-id $EVIDENCE_SNAPSHOT \
---tag-specifications 'ResourceType=volume,Tags=[{Key=Name,Value=EVIDENCE},{Key=Ticket,Value='$CASE'}]' \
+--tag-specifications 'ResourceType=volume,Tags=[{Key=Name,Value=EVIDENCE},{Key=Ticket,Value='$CASE'},{Key=SampleId,Value='$SampleId'},{Key=SampleId,Value='$SampleId'}]' \
 --query VolumeId --availability-zone $AZ --region $REGION --output json --profile $PROFILE)
 EVIDENCE_VOLUME=$(sed -e 's/^"//' -e 's/"$//' <<<"$EVIDENCE_VOLUME")  # Remove Quotes
 echo "*** The Evidence VolumeId is $EVIDENCE_VOLUME"
@@ -54,7 +80,7 @@ echo
 
 # Mount the "Evidence" Volume as Read Only
 PARAMETERS='{"commands":["mkdir /mnt/linux_mount; mount -o ro /dev/xvdf1 /mnt/linux_mount/; lsblk"]}'
-COMMENT="CASE: "$CASE" - Mount the EVIDENCE Volume as Read Only"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Mount the EVIDENCE Volume as Read Only"
 run_ssm_command SIFT wait
 echo
 
@@ -67,8 +93,8 @@ echo "*** The AmiId of the Target Instance is $AMI"
 BASETEMP_INSTANCE=$(aws ec2 run-instances --image-id $AMI --count 1 \
 --instance-type t2.micro --security-groups SSH --query Instances[0].InstanceId \
 --tag-specifications \
- 'ResourceType=volume,Tags=[{Key=Name,Value=BASETEMP},{Key=Ticket,Value='$CASE'}]' \
- 'ResourceType=instance,Tags=[{Key=Name,Value=BASETEMP},{Key=Ticket,Value='$CASE'}]' \
+ 'ResourceType=volume,Tags=[{Key=Name,Value=BASETEMP},{Key=Ticket,Value='$CASE'},{Key=SampleId,Value='$SampleId'}]' \
+ 'ResourceType=instance,Tags=[{Key=Name,Value=BASETEMP},{Key=Ticket,Value='$CASE'},{Key=SampleId,Value='$SampleId'}]' \
 --output json --region $REGION --profile $PROFILE)
 BASETEMP_INSTANCE=$(sed -e 's/^"//' -e 's/"$//' <<<"$BASETEMP_INSTANCE")  # Remove Quotes
 echo "*** The InstanceId of the BASETEMP Instance is $BASETEMP_INSTANCE"
@@ -86,7 +112,7 @@ aws ec2 wait instance-running --instance-ids $BASETEMP_INSTANCE \
 # Create a Snaphot of the BASETEMP Volume
 BASELINE_SNAPSHOT=$(aws ec2 create-snapshot --volume-id $BASETEMP_VOLUME \
 --description 'BASELINE - Case '$CASE --tag-specifications \
-'ResourceType=snapshot,Tags=[{Key=Name,Value=BASELINE},{Key=Ticket,Value='$CASE'}]' \
+'ResourceType=snapshot,Tags=[{Key=Name,Value=BASELINE},{Key=Ticket,Value='$CASE'},{Key=SampleId,Value='$SampleId'}]' \
 --query SnapshotId --region $REGION --output json --profile $PROFILE)
 BASELINE_SNAPSHOT=$(sed -e 's/^"//' -e 's/"$//' <<<"$BASELINE_SNAPSHOT")  # Remove Quotes
 echo "*** The BASELINE SnapshotId is $BASELINE_SNAPSHOT"
@@ -104,14 +130,14 @@ echo
 # Make a BASELINE Volume from the BASELINE Snapshot
 BASELINE_VOLUME=$(aws ec2 create-volume --volume-type gp2 \
 --snapshot-id $BASELINE_SNAPSHOT --tag-specifications \
-'ResourceType=volume,Tags=[{Key=Name,Value=BASELINE},{Key=Ticket,Value='$CASE'}]' \
+'ResourceType=volume,Tags=[{Key=Name,Value=BASELINE},{Key=Ticket,Value='$CASE'},{Key=SampleId,Value='$SampleId'}]' \
 --query VolumeId --availability-zone $AZ --region $REGION --output json --profile $PROFILE)
 BASELINE_VOLUME=$(sed -e 's/^"//' -e 's/"$//' <<<"$BASELINE_VOLUME")  # Remove Quotes
 echo "*** The BASELINE VolumeId is $BASELINE_VOLUME"
 
 # Make a blank DATA Volume
 DATA_VOLUME=$(aws ec2 create-volume --volume-type gp2 --size 100 --tag-specifications \
-'ResourceType=volume,Tags=[{Key=Name,Value=DATA},{Key=Ticket,Value='$CASE'}]' \
+'ResourceType=volume,Tags=[{Key=Name,Value=DATA},{Key=Ticket,Value='$CASE'},{Key=SampleId,Value='$SampleId'}]' \
 --query VolumeId --availability-zone $AZ --region $REGION --output json --profile $PROFILE)
 DATA_VOLUME=$(sed -e 's/^"//' -e 's/"$//' <<<"$DATA_VOLUME")  # Remove Quotes
 echo "*** The DATA VolumeId is $DATA_VOLUME"
@@ -128,7 +154,7 @@ echo
 
 # Mount the BASELINE Volume to the SIFT Workstation as Read Only
 PARAMETERS='{"commands":["mkdir /mnt/linux_base; mount -o ro /dev/xvdg1 /mnt/linux_base/; lsblk"]}'
-COMMENT="CASE: "$CASE" - Mount the BASELINE Volume as Read Only"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Mount the BASELINE Volume as Read Only"
 run_ssm_command SIFT wait
 
 # Wait until the DATA Volume is complete
@@ -143,22 +169,22 @@ echo
 
 # Format the DATA Volume
 PARAMETERS='{"commands":["mkfs.ext4 /dev/xvdh"]}'
-COMMENT="CASE: "$CASE" - Format the DATA Volume"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Format the DATA Volume"
 run_ssm_command SIFT wait
 
 # Mount the DATA Volume to the SIFT Workstation as Read/Write
 PARAMETERS='{"commands":["mkdir /mnt/data; mount /dev/xvdh /mnt/data; lsblk"]}'
-COMMENT="CASE: "$CASE" - Mount the DATA Volume as Read/Write"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Mount the DATA Volume as Read/Write"
 run_ssm_command SIFT wait
 
 # Create a Hash Database of Known Files
 PARAMETERS='{"commands":["mkdir /mnt/data/changed; cd /mnt/data/changed; find /mnt/linux_base -type f -print0 | xargs -0 md5sum > known_files.md5; hfind -i md5sum known_files.md5"]}'
-COMMENT="CASE: "$CASE" - Create a Hash Database of Known Files"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Create a Hash Database of Known Files"
 run_ssm_command SIFT wait
 
 # Find Changed Files relative to BASELINE
 PARAMETERS='{"commands":["mkdir /mnt/data/changed; cd /mnt/data/changed; wget https://s3.amazonaws.com/forensicate.cloud-data/find_changed_files.sh; bash find_changed_files.sh; cat hfind.log"]}'
-COMMENT="CASE: "$CASE" - Find Changed Files relative to BASELINE"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Find Changed Files relative to BASELINE"
 run_ssm_command SIFT wait
 
 # Run the TSK sorter command
@@ -166,7 +192,7 @@ PARAMETERS='{"commands":[
   "mkdir /mnt/data/sorter",
   "sorter -s -f ext4 -d /mnt/data/sorter -x /mnt/data/changed/known_files.md5 /dev/xvdf1"
   ]}'
-COMMENT="CASE: "$CASE" - Run the TSK sorter command"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Run the TSK sorter command"
 run_ssm_command  SIFT nowait
 
 # Run the TSK recover command
@@ -174,52 +200,52 @@ PARAMETERS='{"commands":[
   "mkdir /mnt/data/recovered",
   "tsk_recover /dev/xvdf1 /mnt/data/recovered"
   ]}'
-COMMENT="CASE: "$CASE" - Run the TSK recover command"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Run the TSK recover command"
 run_ssm_command SIFT wait
 
 # Determine if keys are present on compromised system - SSH Folder
 PARAMETERS='{"commands":["ls -als /mnt/linux_mount/home/ec2-user/.ssh/"]}'
-COMMENT="CASE: "$CASE" - Determine if keys are present on compromised system - SSH Folder"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Determine if keys are present on compromised system - SSH Folder"
 run_ssm_command SIFT nowait
 
 # Determine if keys are present on compromised system - AWS Folder
 PARAMETERS='{"commands":["ls -als /mnt/linux_mount/home/ec2-user/.aws/; echo; cat /mnt/linux_mount/home/ec2-user/.aws/credentials"]}'
-COMMENT="CASE: "$CASE" - Determine if keys are present on compromised system - AWS Folder"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Determine if keys are present on compromised system - AWS Folder"
 run_ssm_command SIFT nowait
 
 # Determine if keys are present on compromised system - AWS Keys Expanded Search
 PARAMETERS='{"commands":["egrep -r 'AKIA[A-Z0-9]{16}' /mnt/linux_mount/ | egrep -v 'EXAMPLE'"]}'
-COMMENT="CASE: "$CASE" - Determine if keys are present on compromised system - AWS Keys Expanded Search"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Determine if keys are present on compromised system - AWS Keys Expanded Search"
 run_ssm_command SIFT nowait
 
 # Determine if keys are present on compromised system - SSH Private Keys Expanded Search
 PARAMETERS='{"commands":["egrep -r \"PRIVATE KEY-----\" /mnt/linux_mount/"]}'
-COMMENT="CASE: "$CASE" - Determine if keys are present on compromised system - SSH Private Keys Expanded Search"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Determine if keys are present on compromised system - SSH Private Keys Expanded Search"
 run_ssm_command SIFT nowait
 
 # Look for AWS Systems Manager
 PARAMETERS='{"commands":["find /mnt/linux_mount/ -name 'amazon-ssm-agen*';echo done"]}'
-COMMENT="CASE: "$CASE" - Look for AWS Systems Manager"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Look for AWS Systems Manager"
 run_ssm_command SIFT nowait
 
 # Look for the AWS Inspector Agent
 PARAMETERS='{"commands":["find /mnt/linux_mount/ -name 'awsagen*'; echo done"]}'
-COMMENT="CASE: "$CASE" - Look for the AWS Inspector Agent"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Look for the AWS Inspector Agent"
 run_ssm_command SIFT nowait
 
 # Look for Splunk
 PARAMETERS='{"commands":["find /mnt/linux_mount/ -name 'splunk*'; echo done"]}'
-COMMENT="CASE: "$CASE" - Look for Splunk"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Look for Splunk"
 run_ssm_command SIFT nowait
 
 # Virus scan the mounted evidence
 PARAMETERS='{"commands":["clamscan -i -r --log=/mnt/data/clam-fs.log /mnt/linux_mount/; echo done"]}'
-COMMENT="CASE: "$CASE" - Virus scan the mounted evidence"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Virus scan the mounted evidence"
 run_ssm_command SIFT nowait
 
 # Virus scan the unalocated space
 PARAMETERS='{"commands":["clamscan -i -r --log=/mnt/data/clam-us.log /mnt/data/recovered/; echo done"]}'
-COMMENT="CASE: "$CASE" - Virus scan the unalocated space"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Virus scan the unalocated space"
 run_ssm_command SIFT nowait
 
 # Install Loki
@@ -234,7 +260,7 @@ PARAMETERS='{"commands":[
   "pip install -r requirements.txt",
   "python /tmp/Loki-0.29.1/loki.py --help"
   ]}'
-COMMENT="CASE: "$CASE" - Install Loki"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Install Loki"
 run_ssm_command SIFT wait
 
 # Run Loki
@@ -243,7 +269,7 @@ PARAMETERS='{"commands":[
   "python loki.py --noindicator -p /mnt/linux_mount/",
   "cp loki-siftworkstation.log /mnt/data"
   ]}'
-COMMENT="CASE: "$CASE" - Run Loki"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Run Loki"
 run_ssm_command SIFT nowait
 
 # Investigate cron Jobs
@@ -256,7 +282,7 @@ PARAMETERS='{"commands":[
   "ls -l /mnt/linux_mount/var/spool/cron/*",
   "find /mnt/linux_mount/var/spool/cron/ -type f | xargs cat"
   ]}'
-COMMENT="CASE: "$CASE" - Investigate cron Jobs"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Investigate cron Jobs"
 run_ssm_command SIFT nowait
 
 # Investigate start-up scripts
@@ -269,7 +295,7 @@ PARAMETERS='{"commands":[
   "diff /mnt/data/startup-scripts-baseline.log /mnt/data/startup-scripts-evidence.log > /mnt/data/startup-scripts-diff.log",
   "cat /mnt/data/startup-scripts-diff.log"
   ]}'
-COMMENT="CASE: "$CASE" - Investigate start-up scripts"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Investigate start-up scripts"
 run_ssm_command SIFT nowait
 
 # Check for suspicious files - tmp directory
@@ -283,7 +309,7 @@ PARAMETERS='{"commands":[
   "echo \"<----type the files in the recovered /tmp directory---->\"",
   "find /mnt/data/recovered/tmp | xargs file"
   ]}'
-COMMENT="CASE: "$CASE" - Check for suspicious files - tmp directory"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Check for suspicious files - tmp directory"
 run_ssm_command SIFT nowait
 
 # Check for suspicious files - unusual SUID
@@ -299,7 +325,7 @@ PARAMETERS='{"commands":[
   "echo \"<----Line Count of suid_diff---->\"",
   "wc -l suid_diff"
   ]}'
-COMMENT="CASE: "$CASE" - Check for suspicious files - unusual SUID"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Check for suspicious files - unusual SUID"
 run_ssm_command SIFT nowait
 
 # Check for suspicious files - large files
@@ -309,7 +335,7 @@ PARAMETERS='{"commands":[
   "echo \"<----Recovered files greater than 10Mb---->\"",
   "find /mnt/data/recovered/ -size +10000k"
   ]}'
-COMMENT="CASE: "$CASE" - Check for suspicious files - large files"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Check for suspicious files - large files"
 run_ssm_command SIFT nowait
 
 # Check for suspicious files - files with high entropy
@@ -324,14 +350,14 @@ PARAMETERS='{"commands":[
   "echo \"<----Line Count of high_density_diff---->\"",
   "wc -l high_density_diff"
   ]}'
-COMMENT="CASE: "$CASE" - Check for suspicious files - files with high entropy"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Check for suspicious files - files with high entropy"
 run_ssm_command SIFT nowait
 
 # Review Logs - bash history
 PARAMETERS='{"commands":[
   "for i in $(find /mnt/linux_mount/ -name .bash_history); do echo FILE $i; echo CONTENTS; cat $i; echo; done"
   ]}'
-COMMENT="CASE: "$CASE" - Review Logs - bash history"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Review Logs - bash history"
 run_ssm_command SIFT nowait
 
 # Examine local user accounts and groups
@@ -343,12 +369,12 @@ PARAMETERS='{"commands":[
   "diff /mnt/linux_base/etc/group /mnt/linux_mount/etc/group > /mnt/data/group_diff",
   "cat /mnt/data/group_diff"
   ]}'
-COMMENT="CASE: "$CASE" - Examine local user accounts and groups"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Examine local user accounts and groups"
 run_ssm_command SIFT nowait
 
 # Look for accounts with passwords set
 PARAMETERS='{"commands":["cat /mnt/linux_mount/etc/shadow | grep -F \"$\""]}'
-COMMENT="CASE: "$CASE" - Look for accounts with passwords set"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Look for accounts with passwords set"
 run_ssm_command SIFT nowait
 
 # Examine bootup events & timing
@@ -360,12 +386,12 @@ PARAMETERS='{"commands":[
   "echo \"<----Dump the boot.log---->\"",
   "cat /mnt/linux_mount/var/log/boot.log"
   ]}'
-COMMENT="CASE: "$CASE" - Examine bootup events & timing"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Examine bootup events & timing"
 run_ssm_command SIFT nowait
 
 # Identify past IP addresses
 PARAMETERS='{"commands":["grep -A4 -B1 \"Net device info\" /mnt/linux_mount/var/log/cloud-init-output.log"]}'
-COMMENT="CASE: "$CASE" - Identify past IP addresses"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Identify past IP addresses"
 run_ssm_command SIFT nowait
 
 # Look at the yum log
@@ -376,7 +402,7 @@ PARAMETERS='{"commands":[
   "diff /mnt/linux_base/var/log/yum.log /mnt/linux_mount/var/log/yum.log > /mnt/data/yum-diff.txt",
   "cat /mnt/data/yum-diff.txt"
   ]}'
-COMMENT="CASE: "$CASE" - Look at the yum log"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Look at the yum log"
 run_ssm_command SIFT nowait
 
 # Make a File System Timeline
@@ -387,7 +413,7 @@ PARAMETERS='{"commands":[
   "echo \"<----Dump the timeline---->\"",
   "cat /mnt/data/timeline.csv | sed \"s|File Name|File_Name|\""
 ]}'
-COMMENT="CASE: "$CASE" - Make a File System Timeline"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Make a File System Timeline"
 run_ssm_command SIFT nowait
 
 # Make a Super Timeline Plaso File
@@ -395,7 +421,7 @@ PARAMETERS='{"executionTimeout":["10800"],"commands":[
   "log2timeline.py /mnt/data/plaso.dump /dev/xvdf1",
   "pinfo.py -v /mnt/data/plaso.dump"
 ]}'
-COMMENT="CASE: "$CASE" - Make a Super Timeline Plaso File"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Make a Super Timeline Plaso File"
 #run_ssm_command SIFT wait
 
 # Make a Super Timeline CSV File
@@ -406,7 +432,8 @@ DATE_FILTER='\"'$DATE_FILTER'\"'
 PARAMETERS='{"executionTimeout":["10800"],"commands":[
   "psort.py /mnt/data/plaso.dump '$DATE_FILTER' -w /mnt/data/supertimeline.csv"
   ]}'
-COMMENT="CASE: "$CASE" - Make a Super Timeline CSV File"
+COMMENT="CASE: "$CASE", SampleId: "$SampleId" - Make a Super Timeline CSV File"
 #run_ssm_command SIFT nowait
+
 
 echo "*** Automated Forensic Evidence Collection is Complete"

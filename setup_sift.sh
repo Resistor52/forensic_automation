@@ -13,7 +13,8 @@ fi
 # Launch a SIFT Workstation
 SIFT_AMI=ami-0b9ef98f6dbcfe23d
 SIFT_INSTANCE=$(aws ec2 run-instances --image-id $SIFT_AMI --count 1 \
- --instance-type t2.xlarge --security-groups $SECURITY_GROUP --iam-instance-profile Name=EC2_Responder \
+ --instance-type t2.xlarge --security-groups $SECURITY_GROUP \
+ --iam-instance-profile Name=EC2_Responder \
  --query Instances[0].InstanceId --tag-specifications \
  'ResourceType=volume,Tags=[{Key=Name,Value=SIFT},{Key=Ticket,Value=123456}]' \
  'ResourceType=instance,Tags=[{Key=Name,Value=SIFT},{Key=Ticket,Value=123456}]' \

@@ -2,6 +2,8 @@
 
 export PROFILE='your-profile'
 export REGION='your-region'
+export SSH_PUBLIC_KEY='YOUR_KEY'
+export SSH_KEY='~/.ssh/YOUR_KEY.pem'
 export SECURITY_GROUP="SSH-Only"
 export BUCKET="you-bucket-here"
 export ACCOUNT="999999999999"
