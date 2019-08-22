@@ -24,7 +24,7 @@ The code consists of the following scripts:
 * **[create_queue.sh](create_queue.sh)** - Use this script to create the SQS queue to contain the volumes to be processed.
 * **[fetch_message.sh](fetch_message.sh)** - Run this script to see the current message in the queue.
 * **[delete_mmessage.sh](delete_mmessage.sh)** - This script is used to delete the current message after the volume has been processed.
-* **[unmount_detach_volumes.sh]
+* **[unmount_detach_volumes.sh]** - This script unmounts and then detaches the EBS Volumes and is intended to be called by each iteration of the **process_queue.sh** script. **_TODO:_** Figure out what to do with the detached volumes before the next iteration of **process_queue.sh**
 * **TODO: [process_queue.sh](process_queue.sh)** - This script contains an endless loop that repeatedly calls the **collect_artifacts.sh** script to process the next EBS Volume. If the **collect_artifacts.sh** script has a clean exit, the message will be removed from the queue by calling **delete_message.sh**. The volumes will be unmounted and detached by calling the **unmount_detach_volumes.sh** script and the loop will iterate.
 
 
