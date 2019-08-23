@@ -1,6 +1,6 @@
 # forensic_automation - POC on Automating EC2 Forensics
 This project demonstrates how to automate the forensic investigation of AWS Elastic
-Compute Cloud virtual machines.
+Compute Cloud virtual machines. These scripts automate the methodology discussed in the [Step by Step Walkthrough of Forensic Analysis of Amazon Linux on EC2 for Incident Responders](https://forensicate.cloud/ws1/) workshop.
 
 This code for this project is intended to run from a workstation that has the AWS Command Line Interface (CLI) Installed and has Full EC2 and Systems Manager permissions.
 
@@ -24,8 +24,8 @@ The code consists of the following scripts:
 * **[create_queue.sh](create_queue.sh)** - Use this script to create the SQS queue to contain the volumes to be processed.
 * **[fetch_message.sh](fetch_message.sh)** - Run this script to see the current message in the queue.
 * **[delete_mmessage.sh](delete_mmessage.sh)** - This script is used to delete the current message after the volume has been processed.
-* **[unmount_detach_volumes.sh]** - This script unmounts and then detaches the EBS Volumes and is intended to be called by each iteration of the **process_queue.sh** script. **_TODO:_** Figure out what to do with the detached volumes before the next iteration of **process_queue.sh**
-* **TODO: [process_queue.sh](process_queue.sh)** - This script contains an endless loop that repeatedly calls the **collect_artifacts.sh** script to process the next EBS Volume. If the **collect_artifacts.sh** script has a clean exit, the message will be removed from the queue by calling **delete_message.sh**. The volumes will be unmounted and detached by calling the **unmount_detach_volumes.sh** script and the loop will iterate.
+* **[unmount_detach_delete_volumes.sh]** - This script unmounts and then detaches the EBS Volumes and is intended to be called by each iteration of the **process_queue.sh** script. 
+* **[process_queue.sh](process_queue.sh)** - This script contains an endless loop that repeatedly calls the **collect_artifacts.sh** script to process the next EBS Volume. If the **collect_artifacts.sh** script has a clean exit, the message will be removed from the queue by calling **delete_message.sh**. The volumes will be unmounted and detached by calling the **unmount_detach_delete_volumes.sh** script and the loop will iterate.
 
 
 Normally the SIFT will be either kept running or will be in a stopped state yet fully patched, so it will not need to be provisioned every time EBS Volume forensics is needed.
@@ -52,10 +52,11 @@ The **setup_target.sh** script assumes there is an existing IAM Role called "SSM
 4. Make a "SSH-Only" security group that allows only inbound SSH access from your IP address.
 5. Run the **setup_sift.sh** script to provision a SIFT Workstation and configure it. This will take some time because the SIFT Needs to be updated.
 6. Run the **make_example_volume.sh** script to create an interesting EBS Volume to forensicate.
-7. Determine the VolumeId of the Target Volume by looking in the AWS Console (or by using the output from the previous step). Run the **add_volume_to_queue.sh** script to add the volume to be processed to the queue. Run the command as follows:
+7. Execute the **create_queue.sh** script to make a queue to contain the volumes to process. (This only needs to be performed once per account.)
+8. Determine the VolumeId of the Target Volume by looking in the AWS Console (or by using the output from the previous step). Run the **add_volume_to_queue.sh** script to add the volume to be processed to the queue. Run the command as follows:
 ```
 add_volume_to_queue.sh VOLUME "Case-1234" "Sample-ABC1234"
 ```
 Where *VOLUME* is the VolumeId to be processed.
 
-8. Run the **collect_artifacts.sh** script to process the EBS volume. This will take some time so monitor the progress of the script and examine the interim output in the Systems Manager Run Command "Command History."
+9. Run the **collect_artifacts.sh** script to process the EBS volume. This will take some time so monitor the progress of the script and examine the interim output in the Systems Manager Run Command "Command History."

@@ -68,4 +68,11 @@ PARAMETERS='{"commands":[
   ]}'
 COMMENT="Disable the sansforensics user"
 run_ssm_command SIFT wait
+
+# Install the AWS Command Line Interface
+echo "Installing the AWS Command Line Interface"
+PARAMETERS='{"commands":["pip install awscli"]}'
+COMMENT="Install the AWS Command Line Interface"
+run_ssm_command SIFT wait
+
 echo; echo "*** The SIFT Workstation has been updated and is ready for use"

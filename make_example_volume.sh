@@ -1,9 +1,10 @@
 #!/bin/bash
+set -e
 
 source parameters.sh
 
 AZ=$REGION"a"
-echo $AZ
+echo "Using Availability Zone: "$AZ
 
 # Make an "Example" Volume from the publicly shared snapshot
 PUBLIC_SHAPSHOT=snap-05f0794291c491687
@@ -17,15 +18,3 @@ echo "*** The Target VolumeId is "$EXAMPLE_VOLUME
 aws ec2 wait volume-available --volume-ids $EXAMPLE_VOLUME \
  --region $REGION --profile $PROFILE
 echo "*** The Example Volume is ready"
-
-aws sqs send-message --queue-url "https://queue.amazonaws.com/$ACCOUNT/AnalyzeEBSVolumes.fifo" \
---message-body $TARGET_VOLUME --message-group-id "1" --message-attributes '{
-  "CASE": {
-    "DataType": "String",
-    "StringValue": "'$CASE'"
-  },
-  "SampleId": {
-    "DataType": "String",
-    "StringValue": "Example Volume"
-  }
-}' --output json --region $REGION --profile $PROFILE

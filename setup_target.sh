@@ -34,19 +34,22 @@ echo "*** The Target Instance Public IP Address is $TARGET_IP"
 echo "Configure the Target Instance"
 # Install the SSM Agent on the SIFT Workstation
 echo "Installing the Systems Manager Agent"
+echo "The Target instance will be ready in about 10 minutes."
+echo "When it is ready to be imaged it will shutdown"
+echo "The current time is: $(date)"
+
 while : ; do     #Wait for SSH
 ssh -o StrictHostKeyChecking=no -i $SSH_KEY ec2-user@$TARGET_IP \
 'cd /home/ec2-user/; wget https://s3.amazonaws.com/forensicate.cloud-data/dont_peek.sh; \
- sudo bash dont_peek.sh forensics 2>&1'
+ sudo bash dont_peek.sh forensics 2>&1; echo "done"; exit'
+ STATE=$(aws ec2 describe-instances --instance-ids $TARGET_INSTANCE \
+ --profile $PROFILE --output json --query 'Reservations[0].Instances[0].State.Code')
+if [ "$STATE" = "80" ]; then break ;fi
 if [ "$?" = "0" ]; then break ;fi
   sleep 3
   printf "*"
 done
 echo "*** The SSM Agent has been installed via SSH"
-
-echo "The Target instance will be ready in about 10 minutes."
-echo "When it is ready to be imaged it will shutdown"
-echo "The current time is: $(date)"
 
 # Wait until the Target Instance has stopped
 echo "Waiting for the Target Instance to enter STOPPED state"
