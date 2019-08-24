@@ -412,10 +412,8 @@ run_ssm_command SIFT nowait
 
 # Make a File System Timeline
 PARAMETERS='{"commands":[
-  "echo \"<----Make the file system timeline---->\"",
   "fls -r -m / /dev/xvdf1 > /mnt/data/body.txt",
   "mactime -b /mnt/data/body.txt -d > /mnt/data/timeline.csv",
-  "echo \"<----Dump the timeline---->\"",
   "cat /mnt/data/timeline.csv | sed \"s|File Name|File_Name|\""
 ]}'
 COMMENT=$CASE"-"$SampleId" - Make a File System Timeline"
