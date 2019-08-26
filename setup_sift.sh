@@ -64,7 +64,7 @@ run_ssm_command SIFT wait
 echo "Disable the sansforensics user via Systems Manager"
 PARAMETERS='{"commands":[
   "usermod -L sansforensics",
-  "echo 'The sansforensics user has been disabled'"
+  "echo \"The sansforensics user has been disabled\""
   ]}'
 COMMENT="Disable the sansforensics user"
 run_ssm_command SIFT wait
